@@ -11,3 +11,5 @@ dist/
 .DS_Store
 Thumbs.db
 chrome_user_data
+
+data

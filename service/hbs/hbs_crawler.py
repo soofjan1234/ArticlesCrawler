@@ -1,3 +1,13 @@
+import sys
+import os
+
+# 获取当前脚本所在目录
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# 获取项目根目录
+project_root = os.path.abspath(os.path.join(current_dir, '../../'))
+# 添加到Python搜索路径
+sys.path.append(project_root)
+
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -5,13 +15,13 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import markdownify
 import time
-import os
 import re
+from ..utils import download_image, get_static_html_content, save_article_to_md
 
 # 目标列表URL
 LIST_URL = "https://www.library.hbs.edu/working-knowledge/collections/strategy-and-innovation"
 # 数据保存目录
-DATA_DIR = "hbs/data"
+DATA_DIR = "data/hbs"
 
 # 确保数据目录存在
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -52,12 +62,6 @@ def get_dynamic_html_content(url):
     finally:
         # 关闭浏览器
         driver.quit()
-
-# 发送请求获取静态网页内容
-def get_static_html_content(url):
-    response = requests.get(url, timeout=10)
-    response.raise_for_status()
-    return response.text
 
 # 解析列表页面，从li元素中提取文章标题、图片和链接
 def parse_list_page(html_content, max_items=10):
@@ -122,29 +126,6 @@ def parse_article_content(html_content):
     markdown = markdownify.markdownify(str(article_div), heading_style="ATX")
     return markdown
 
-# 保存文章到Markdown文件
-def save_article_to_md(title, image_url, content, article_link, index):
-    # 生成标题前20个字符
-    short_title = title[:20] if title else "untitled"
-    # 替换非法字符
-    safe_short_title = re.sub(r'[<>:"/\\|?*]', '-', short_title)
-    safe_short_title = safe_short_title.strip()
-    
-    # 生成文件名格式：1-(标题前20个字符).md
-    filename = os.path.join(DATA_DIR, f"{index}-{safe_short_title}.md")
-    
-    # 构建Markdown内容
-    md_content = f"# {title}\n\n"
-    if image_url:
-        md_content += f"![{title}]({image_url})\n\n"
-    md_content += content
-    
-    # 保存到文件
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write(md_content)
-    
-    return filename
-
 # 主函数
 def main():
     try:
@@ -188,7 +169,7 @@ def main():
                 content = parse_article_content(article_html)
                 
                 # 保存为Markdown文件
-                filename = save_article_to_md(title, image_url, content, article_link, i)
+                filename = save_article_to_md(title, image_url, content, article_link, i, DATA_DIR)
                 print(f"  已保存到: {filename}")
                 
             except Exception as e:
