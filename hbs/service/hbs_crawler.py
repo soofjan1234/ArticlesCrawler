@@ -1,0 +1,208 @@
+import requests
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+import markdownify
+import time
+import os
+import re
+
+# 目标列表URL
+LIST_URL = "https://www.library.hbs.edu/working-knowledge/collections/strategy-and-innovation"
+# 数据保存目录
+DATA_DIR = "hbs/data"
+
+# 确保数据目录存在
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# 使用Selenium获取动态加载的页面内容
+def get_dynamic_html_content(url):
+    # 设置Chrome选项
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')  # 无头模式，不显示浏览器窗口
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    
+    # 初始化WebDriver
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver.set_page_load_timeout(30)
+    
+    try:
+        # 打开URL
+        driver.get(url)
+        
+        # 等待页面加载
+        time.sleep(3)
+        
+        # 向下滚动页面到2/3处，触发动态加载
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight * 2/3);")
+        time.sleep(2)
+        
+        # 获取页面HTML内容
+        html_content = driver.page_source
+        
+        return html_content
+    except Exception as e:
+        print(f"使用Selenium获取页面时出错：{e}")
+        # 尝试使用静态请求
+        print("尝试使用静态请求获取页面...")
+        return get_static_html_content(url)
+    finally:
+        # 关闭浏览器
+        driver.quit()
+
+# 发送请求获取静态网页内容
+def get_static_html_content(url):
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+    return response.text
+
+# 解析列表页面，从li元素中提取文章标题、图片和链接
+def parse_list_page(html_content, max_items=10):
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # 查找所有li.hbs-tease-feed__item元素
+    list_items = soup.find_all('li', class_='hbs-tease-feed__item', limit=max_items)
+    
+    if not list_items:
+        raise Exception("未找到文章列表项")
+    
+    # 从每个列表项中提取文章信息
+    articles_info = []
+    for item in list_items:
+        # 提取标题
+        title = ""
+        title_link = item.find('a', class_='hbs-article-tease__title__link')
+        if title_link:
+            title = title_link.get_text(strip=True)
+        
+        # 提取链接
+        link = ""
+        if title_link and 'href' in title_link.attrs:
+            link = title_link['href']
+        
+        # 提取图片URL
+        image_url = ""
+        media_wrapper = item.find('span', class_='hbs-media-asset__wrapper')
+        if media_wrapper:
+            img_elem = media_wrapper.find('img')
+            if img_elem and 'src' in img_elem.attrs:
+                image_url = img_elem['src']
+        
+        # 保存文章信息
+        articles_info.append((title, image_url, link))
+    
+    # 提取下一页链接
+    next_page_url = ""
+    pagination = soup.find('div', class_='hbs-pagination__content')
+    if pagination:
+        # 查找Next按钮链接
+        next_button = pagination.find('a', class_='hbs-pagination__link', string='Next')
+        if next_button and 'href' in next_button.attrs:
+            next_page_url = next_button['href']
+    
+    return articles_info, next_page_url
+
+# 解析文章页面，提取文章正文并转换为Markdown
+def parse_article_content(html_content):
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # 查找目标文章内容div
+    article_div = soup.find('div', class_='hbs-global-align-center hbs-rich-text hbs-use-dropcap')
+    if not article_div:
+        # 尝试其他可能的选择器
+        article_div = soup.find('div', class_=lambda x: x and 'hbs-rich-text' in x)
+    
+    if not article_div:
+        raise Exception("未找到目标文章内容div")
+    
+    # 使用markdownify库进行转换
+    markdown = markdownify.markdownify(str(article_div), heading_style="ATX")
+    return markdown
+
+# 保存文章到Markdown文件
+def save_article_to_md(title, image_url, content, article_link, index):
+    # 生成标题前20个字符
+    short_title = title[:20] if title else "untitled"
+    # 替换非法字符
+    safe_short_title = re.sub(r'[<>:"/\\|?*]', '-', short_title)
+    safe_short_title = safe_short_title.strip()
+    
+    # 生成文件名格式：1-(标题前20个字符).md
+    filename = os.path.join(DATA_DIR, f"{index}-{safe_short_title}.md")
+    
+    # 构建Markdown内容
+    md_content = f"# {title}\n\n"
+    if image_url:
+        md_content += f"![{title}]({image_url})\n\n"
+    md_content += content
+    
+    # 保存到文件
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(md_content)
+    
+    return filename
+
+# 主函数
+def main():
+    try:
+        all_articles = []
+        current_url = LIST_URL
+        pages_to_crawl = 2  # 只抓取前两页
+        
+        print(f"开始爬取 {LIST_URL} 的前 {pages_to_crawl} 页内容...")
+        
+        for page in range(1, pages_to_crawl + 1):
+            print(f"\n=== 正在抓取第 {page} 页: {current_url} ===")
+            
+            # 获取动态加载的页面HTML
+            list_html = get_dynamic_html_content(current_url)
+            
+            # 解析页面，获取文章信息和下一页链接
+            page_articles, next_page_url = parse_list_page(list_html, max_items=10)
+            print(f"成功提取第 {page} 页的 {len(page_articles)} 篇文章信息")
+            
+            # 添加到总列表
+            all_articles.extend(page_articles)
+            
+            # 如果没有下一页或已经抓取了足够的页面，停止
+            if not next_page_url or page >= pages_to_crawl:
+                break
+            
+            # 更新当前URL为下一页URL
+            current_url = next_page_url
+        
+        print(f"\n=== 开始爬取 {len(all_articles)} 篇文章的详细内容 ===")
+        
+        # 爬取每篇文章的详细内容并保存为Markdown
+        for i, (title, image_url, article_link) in enumerate(all_articles, 1):
+            print(f"\n正在处理第 {i}/{len(all_articles)} 篇文章: {title}")
+            
+            try:
+                # 获取文章页面HTML
+                article_html = get_static_html_content(article_link)
+                
+                # 提取文章正文
+                content = parse_article_content(article_html)
+                
+                # 保存为Markdown文件
+                filename = save_article_to_md(title, image_url, content, article_link, i)
+                print(f"  已保存到: {filename}")
+                
+            except Exception as e:
+                print(f"  处理失败: {e}")
+                continue
+        
+        print(f"\n=== 爬取完成 ===")
+        print(f"共爬取了 {len(all_articles)} 篇文章")
+        print(f"Markdown文件已保存到: {os.path.abspath(DATA_DIR)}")
+        
+    except Exception as e:
+        print(f"处理过程中出错：{e}")
+        import traceback
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    main()
