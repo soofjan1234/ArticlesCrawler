@@ -115,7 +115,7 @@ def replace_image_references(content, img_mapping):
     
     return re.sub(md_img_pattern, replace_md_img, html_content)
 
-def save_article_to_md(title, image_url, content, article_link, index, data_dir):
+def save_article_to_md(title, image_url, content, article_link, index, data_dir, author_info="", excerpt=""):
     """
     保存文章到Markdown文件，实现图片自动下载和引用替换
     
@@ -164,8 +164,16 @@ def save_article_to_md(title, image_url, content, article_link, index, data_dir)
             # 生成相对引用路径
             img_mapping[img_url] = img_filename
     
-    # 构建Markdown内容：标题+图片+文章
+    # 构建Markdown内容：标题+作者信息+摘要+图片+文章
     md_content = f"# {title}\n\n"
+    
+    # 添加作者信息和时间
+    if author_info:
+        md_content += f"**{author_info}**\n\n"
+    
+    # 添加摘要
+    if excerpt:
+        md_content += f"&gt; {excerpt}\n\n"
     
     # 如果有封面图片，添加到标题下方
     if image_url and image_url in img_mapping:
@@ -182,7 +190,11 @@ def save_article_to_md(title, image_url, content, article_link, index, data_dir)
         soup = BeautifulSoup(processed_content, 'html.parser')
         if soup.find():
             # 是HTML，转换为Markdown
-            md_content += markdownify.markdownify(processed_content, heading_style="ATX")
+            md_content_temp = markdownify.markdownify(processed_content, heading_style="ATX")
+            # 将转换结果中的&gt;替换为>
+            md_content_temp = md_content_temp.replace("&gt;", ">")
+            # 添加到最终内容中
+            md_content += md_content_temp
         else:
             # 已经是Markdown，直接添加
             md_content += processed_content

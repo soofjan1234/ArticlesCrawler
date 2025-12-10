@@ -16,7 +16,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 import markdownify
 import re
 import time
-from ..utils import download_image, get_static_html_content, save_article_to_md
+from service.utils import download_image, get_static_html_content, save_article_to_md
 
 # 目标列表URL
 LIST_URL = "https://www.bcg.com/search?q=&f4=00000172-0efd-d58d-a97a-5eff5173002a&f7=00000171-f17b-d394-ab73-f3fbae0d0000&s=0"
@@ -131,9 +131,8 @@ def parse_article_content(html_content):
         if not article_div:
             raise Exception("未找到目标文章内容div")
     
-    # 使用markdownify库进行转换
-    markdown = markdownify.markdownify(str(article_div), heading_style="ATX")
-    return markdown
+    # 返回原始HTML内容，由utils.py中的save_article_to_md函数统一转换为Markdown
+    return str(article_div)
 
 # 从文章页面提取标题
 def extract_article_title(html_content):
@@ -150,6 +149,28 @@ def extract_article_title(html_content):
         return h2_tag.get_text(strip=True)
     
     return "Untitled"
+
+# 提取文章作者、时间和摘要
+def extract_article_meta(html_content):
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # 提取作者信息和时间
+    author_info = ""
+    details_div = soup.find('div', class_='heroAnimatedPanel_details')
+    if details_div:
+        author_info = details_div.get_text(strip=True)
+    
+    # 提取摘要
+    excerpt = ""
+    key_takeaways_div = soup.find('div', class_='keyTakeAways_description')
+    if key_takeaways_div:
+        excerpt = key_takeaways_div.get_text(strip=True)
+        # 使用正则表达式处理"Key Takeaways"后面的空格问题
+        import re
+        # 将"Key Takeaways"后面没有空格的情况替换为带空格的形式
+        excerpt = re.sub(r'Key Takeaways(?!\s)', r'Key Takeaways ', excerpt)
+    
+    return author_info, excerpt
 
 # 主函数
 def main():
@@ -213,11 +234,14 @@ def main():
                 # 从文章页面提取封面图片
                 image_url = extract_article_image(article_html)
                 
+                # 提取作者信息、时间和摘要
+                author_info, excerpt = extract_article_meta(article_html)
+                
                 # 提取文章正文
                 content = parse_article_content(article_html)
                 
                 # 保存为Markdown文件
-                filename = save_article_to_md(title, image_url, content, article_link, i, DATA_DIR)
+                filename = save_article_to_md(title, image_url, content, article_link, i, DATA_DIR, author_info, excerpt)
                 print(f"  已保存到: {filename}")
                 
             except Exception as e:

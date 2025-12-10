@@ -12,7 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 import markdownify
 import re
-from ..utils import download_image, get_static_html_content, save_article_to_md
+from service.utils import download_image, get_static_html_content, save_article_to_md
 
 # 目标列表URL
 base_url = "https://iveybusinessjournal.com/articles/"
@@ -101,9 +101,20 @@ def parse_article_content(html_content):
     if not article_div:
         raise Exception("未找到目标文章内容div")
     
-    # 使用markdownify库进行转换
-    markdown = markdownify.markdownify(str(article_div), heading_style="ATX")
-    return markdown
+    # 返回原始HTML内容，由utils.py中的save_article_to_md函数统一转换为Markdown
+    return str(article_div)
+
+# 提取文章作者和时间信息
+def extract_article_meta(html_content):
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # 提取作者信息和时间
+    author_info = ""
+    meta_div = soup.find('div', class_='cmsmasters-single-post-meta_second__inner')
+    if meta_div:
+        author_info = meta_div.get_text(strip=True)
+    
+    return author_info
 
 
 
@@ -151,11 +162,14 @@ def main():
                 # 如果文章页面没有图片，使用列表页的图片
                 image_url = article_image_url if article_image_url else list_image_url
                 
+                # 提取作者信息和时间
+                author_info = extract_article_meta(article_html)
+                
                 # 提取文章正文
                 content = parse_article_content(article_html)
                 
                 # 保存为Markdown文件
-                filename = save_article_to_md(title, image_url, content, article_link, i, data_dir)
+                filename = save_article_to_md(title, image_url, content, article_link, i, data_dir, author_info)
                 print(f"  已保存到: {filename}")
                 
             except Exception as e:

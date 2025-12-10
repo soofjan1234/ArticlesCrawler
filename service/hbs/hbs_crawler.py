@@ -16,7 +16,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 import markdownify
 import time
 import re
-from ..utils import download_image, get_static_html_content, save_article_to_md
+from service.utils import download_image, get_static_html_content, save_article_to_md
 
 # 目标列表URL
 LIST_URL = "https://www.library.hbs.edu/working-knowledge/collections/strategy-and-innovation"
@@ -122,9 +122,42 @@ def parse_article_content(html_content):
     if not article_div:
         raise Exception("未找到目标文章内容div")
     
-    # 使用markdownify库进行转换
-    markdown = markdownify.markdownify(str(article_div), heading_style="ATX")
-    return markdown
+    # 返回原始HTML内容，由utils.py中的save_article_to_md函数统一转换为Markdown
+    return str(article_div)
+
+# 从文章页面提取作者信息、时间和摘要
+def extract_article_meta(html_content):
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # 提取作者信息和时间
+    author_info = ""
+    
+    # 尝试1: 从hbs-split-topper__meta提取
+    meta_div = soup.find('div', class_='hbs-split-topper__meta')
+    if meta_div:
+        author_info = meta_div.get_text(strip=True)
+    
+    # 尝试2: 从hbs-article-topper__meta提取
+    if not author_info:
+        meta_div = soup.find('div', class_='hbs-article-topper__meta')
+        if meta_div:
+            author_info = meta_div.get_text(strip=True)
+    
+    # 提取摘要
+    excerpt = ""
+    
+    # 尝试1: 从hbs-split-topper__excerpt提取
+    excerpt_div = soup.find('div', class_='hbs-split-topper__excerpt')
+    if excerpt_div:
+        excerpt = excerpt_div.get_text(strip=True)
+    
+    # 尝试2: 从hbs-article-topper__subheading提取
+    if not excerpt:
+        subheading_div = soup.find('div', class_='hbs-article-topper__subheading')
+        if subheading_div:
+            excerpt = subheading_div.get_text(strip=True)
+    
+    return author_info, excerpt
 
 # 主函数
 def main():
@@ -165,11 +198,14 @@ def main():
                 # 获取文章页面HTML
                 article_html = get_static_html_content(article_link)
                 
+                # 提取作者信息、时间和摘要
+                author_info, excerpt = extract_article_meta(article_html)
+                
                 # 提取文章正文
                 content = parse_article_content(article_html)
                 
                 # 保存为Markdown文件
-                filename = save_article_to_md(title, image_url, content, article_link, i, DATA_DIR)
+                filename = save_article_to_md(title, image_url, content, article_link, i, DATA_DIR, author_info, excerpt)
                 print(f"  已保存到: {filename}")
                 
             except Exception as e:
