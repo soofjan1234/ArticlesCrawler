@@ -22,7 +22,7 @@ data_dir = "data/ivey"
 # 确保数据目录存在
 os.makedirs(data_dir, exist_ok=True)
 
-# 解析列表页面，提取文章标题和链接
+# 解析列表页面，提取文章标题、图片、链接和分类
 def parse_list_page(html_content, max_items=10):
     soup = BeautifulSoup(html_content, 'html.parser')
     
@@ -56,8 +56,22 @@ def parse_list_page(html_content, max_items=10):
         # 先不提取图片，留待后续从文章页面提取
         image_url = None
         
+        # 提取分类信息
+        category = ""
+        
+        # 查找所有分类链接（a标签，rel="category tag"）
+        category_links = article.find_all('a', rel='category tag')
+        if category_links:
+            # 转换为Markdown格式，并使用空格分隔
+            category = ' '.join([f"[{link.text.strip()}]({link['href']})" for link in category_links])
+        else:
+            # 尝试原来的方法
+            category_span = article.find('span', class_='cmsmasters-postmeta__content')
+            if category_span:
+                category = markdownify.markdownify(str(category_span), heading_style="ATX").strip()
+        
         # 保存文章信息
-        articles_info.append((title, image_url, link))
+        articles_info.append((title, image_url, link, category))
     
     # 提取下一页链接
     next_page_url = ""
@@ -112,7 +126,7 @@ def extract_article_meta(html_content):
     author_info = ""
     meta_div = soup.find('div', class_='cmsmasters-single-post-meta_second__inner')
     if meta_div:
-        author_info = meta_div.get_text(strip=True)
+        author_info = markdownify.markdownify(str(meta_div), heading_style="ATX").strip()
     
     return author_info
 
@@ -150,7 +164,7 @@ def main():
         print(f"\n=== 开始爬取 {len(all_articles)} 篇文章的详细内容 ===")
         
         # 爬取每篇文章的详细内容并保存为Markdown
-        for i, (title, list_image_url, article_link) in enumerate(all_articles, 1):
+        for i, (title, list_image_url, article_link, category) in enumerate(all_articles, 1):
             print(f"\n正在处理第 {i}/{len(all_articles)} 篇文章: {title}")
             
             try:
@@ -169,7 +183,7 @@ def main():
                 content = parse_article_content(article_html)
                 
                 # 保存为Markdown文件
-                filename = save_article_to_md(title, image_url, content, article_link, i, data_dir, author_info)
+                filename = save_article_to_md(title, image_url, content, article_link, i, data_dir, author_info, "", category)
                 print(f"  已保存到: {filename}")
                 
             except Exception as e:

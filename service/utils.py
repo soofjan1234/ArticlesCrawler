@@ -115,7 +115,7 @@ def replace_image_references(content, img_mapping):
     
     return re.sub(md_img_pattern, replace_md_img, html_content)
 
-def save_article_to_md(title, image_url, content, article_link, index, data_dir, author_info="", excerpt=""):
+def save_article_to_md(title, image_url, content, article_link, index, data_dir, author_info="", excerpt="", category=""):
     """
     保存文章到Markdown文件，实现图片自动下载和引用替换
     
@@ -126,6 +126,9 @@ def save_article_to_md(title, image_url, content, article_link, index, data_dir,
         article_link: 文章链接
         index: 文章索引
         data_dir: 数据保存目录
+        author_info: 作者信息
+        excerpt: 文章摘要
+        category: 文章分类
     
     返回:
         保存的Markdown文件路径
@@ -164,16 +167,20 @@ def save_article_to_md(title, image_url, content, article_link, index, data_dir,
             # 生成相对引用路径
             img_mapping[img_url] = img_filename
     
-    # 构建Markdown内容：标题+作者信息+摘要+图片+文章
+    # 构建Markdown内容：标题+分类+作者信息+摘要+图片+文章
     md_content = f"# {title}\n\n"
+    
+    # 添加分类信息
+    if category:
+        md_content += f"{category}\n\n"
     
     # 添加作者信息和时间
     if author_info:
-        md_content += f"**{author_info}**\n\n"
+        md_content += f"{author_info}\n\n"
     
     # 添加摘要
     if excerpt:
-        md_content += f"&gt; {excerpt}\n\n"
+        md_content += f"{excerpt}\n\n"
     
     # 如果有封面图片，添加到标题下方
     if image_url and image_url in img_mapping:

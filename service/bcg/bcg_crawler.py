@@ -26,6 +26,48 @@ DATA_DIR = "data/bcg"
 # 确保数据目录存在
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# 处理BCG网站的cookie同意弹窗
+def handle_bcg_cookie_popup(driver):
+    """
+    处理BCG网站的cookie同意弹窗，该弹窗位于iframe中
+    
+    参数:
+        driver: Selenium WebDriver实例
+    """
+    try:
+        # 查找TrustArc cookie弹窗的iframe
+        cookie_iframes = driver.find_elements('css selector', 'iframe.truste_popframe')
+        print(f"找到 {len(cookie_iframes)} 个TrustArc iframe")
+        
+        for iframe in cookie_iframes:
+            try:
+                # 切换到iframe中
+                driver.switch_to.frame(iframe)
+                
+                # 尝试查找Accept and Close按钮
+                accept_button = driver.find_element('css selector', 'a.call')
+                button_text = accept_button.text.upper()
+                
+                if 'ACCEPT AND CLOSE' in button_text:
+                    print("点击'Accept and Close'按钮...")
+                    accept_button.click()
+                    print("已点击Cookie同意按钮")
+                    # 等待弹窗关闭
+                    time.sleep(3)
+                    break
+            except Exception as iframe_e:
+                print(f"在iframe中查找按钮时出错: {iframe_e}")
+                # 切换回主页面
+                driver.switch_to.default_content()
+                continue
+            finally:
+                # 无论是否成功，都切换回主页面
+                driver.switch_to.default_content()
+    except Exception as e:
+        print(f"处理Cookie弹窗时出错: {e}")
+        # 确保切换回主页面
+        driver.switch_to.default_content()
+
 # 使用Selenium获取动态加载的页面内容，返回driver和初始HTML
 def get_initial_driver(url):
     # 设置Chrome选项
@@ -43,6 +85,9 @@ def get_initial_driver(url):
     
     # 等待页面加载
     time.sleep(3)
+    
+    # 处理cookie同意弹窗
+    handle_bcg_cookie_popup(driver)
     
     # 获取初始页面HTML
     initial_html = driver.page_source
@@ -150,7 +195,7 @@ def extract_article_title(html_content):
     
     return "Untitled"
 
-# 提取文章作者、时间和摘要
+# 提取文章作者、时间、摘要和分类
 def extract_article_meta(html_content):
     soup = BeautifulSoup(html_content, 'html.parser')
     
@@ -158,19 +203,21 @@ def extract_article_meta(html_content):
     author_info = ""
     details_div = soup.find('div', class_='heroAnimatedPanel_details')
     if details_div:
-        author_info = details_div.get_text(strip=True)
-    
+        author_info = markdownify.markdownify(str(details_div), heading_style="ATX").strip()    
+
     # 提取摘要
     excerpt = ""
     key_takeaways_div = soup.find('div', class_='keyTakeAways_description')
     if key_takeaways_div:
-        excerpt = key_takeaways_div.get_text(strip=True)
-        # 使用正则表达式处理"Key Takeaways"后面的空格问题
-        import re
-        # 将"Key Takeaways"后面没有空格的情况替换为带空格的形式
-        excerpt = re.sub(r'Key Takeaways(?!\s)', r'Key Takeaways ', excerpt)
+        excerpt = markdownify.markdownify(str(key_takeaways_div), heading_style="ATX").strip() 
     
-    return author_info, excerpt
+    # 提取分类信息 - div.heroAnimatedPanel_subTopicLink
+    category = ""
+    category_div = soup.find('div', class_='heroAnimatedPanel_subTopicLink')
+    if category_div:
+        category = markdownify.markdownify(str(category_div), heading_style="ATX").strip() 
+    
+    return author_info, excerpt, category
 
 # 主函数
 def main():
@@ -204,8 +251,19 @@ def main():
                 current_html = scroll_to_load_more(driver)
                 scroll_count += 1
                 
-                # 如果没有新增链接，可能已加载完所有内容，停止
-                if not new_links:
+                # 解析新加载的页面内容
+                new_links = parse_list_page(current_html, existing_links=all_articles_links, max_items=max_items - len(all_articles_links))
+                
+                if new_links:
+                    # 添加新链接到总列表
+                    all_articles_links.extend(new_links)
+                    print(f"已提取 {len(all_articles_links)}/{max_items} 篇文章链接")
+                    
+                    # 如果已达到目标数量，停止
+                    if len(all_articles_links) >= max_items:
+                        break
+                else:
+                    # 如果连续两次都没有新增链接，才停止
                     print("没有找到新的文章链接，停止加载")
                     break
         finally:
@@ -234,14 +292,14 @@ def main():
                 # 从文章页面提取封面图片
                 image_url = extract_article_image(article_html)
                 
-                # 提取作者信息、时间和摘要
-                author_info, excerpt = extract_article_meta(article_html)
+                # 提取作者信息、时间、摘要和分类
+                author_info, excerpt, category = extract_article_meta(article_html)
                 
                 # 提取文章正文
                 content = parse_article_content(article_html)
                 
                 # 保存为Markdown文件
-                filename = save_article_to_md(title, image_url, content, article_link, i, DATA_DIR, author_info, excerpt)
+                filename = save_article_to_md(title, image_url, content, article_link, i, DATA_DIR, author_info, excerpt, category)
                 print(f"  已保存到: {filename}")
                 
             except Exception as e:

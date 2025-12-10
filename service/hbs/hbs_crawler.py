@@ -122,26 +122,57 @@ def parse_article_content(html_content):
     if not article_div:
         raise Exception("未找到目标文章内容div")
     
+    # 查找所有hbs-component--cta-card元素
+    cta_cards = soup.find_all('div', class_='hbs-component--cta-card hbs-global-align-center')
+    
+    # 如果找到cta-card元素，将它们添加到article_div的末尾
+    if cta_cards:
+        # 创建一个新的div来包含所有cta-card
+        cta_container = soup.new_tag('div')
+        cta_container['class'] = ['hbs-cta-cards-container']
+        
+        # 添加所有cta-card到容器中
+        for card in cta_cards:
+            cta_container.append(card)
+            # 添加一个换行，避免内容粘连
+            cta_container.append(soup.new_tag('br'))
+        
+        # 将容器添加到article_div的末尾
+        article_div.append(cta_container)
+    
     # 返回原始HTML内容，由utils.py中的save_article_to_md函数统一转换为Markdown
     return str(article_div)
 
-# 从文章页面提取作者信息、时间和摘要
+# 从文章页面提取作者信息、时间、摘要和分类
 def extract_article_meta(html_content):
     soup = BeautifulSoup(html_content, 'html.parser')
     
-    # 提取作者信息和时间
+    # 提取作者信息、时间和分类
     author_info = ""
+    excerpt = ""
+    category = ""
     
-    # 尝试1: 从hbs-split-topper__meta提取
+    # 提取分类信息 - a.hbs-article-topper__overline
+    category_a = soup.find('a', class_='hbs-article-topper__overline')
+    if category_a:
+        category = markdownify.markdownify(str(category_a), heading_style="ATX").strip()
+    
+    # 尝试1: 从hbs-split-topper__meta下的p.hbs-byline__text提取
     meta_div = soup.find('div', class_='hbs-split-topper__meta')
     if meta_div:
-        author_info = meta_div.get_text(strip=True)
+        byline_p = meta_div.find('p', class_='hbs-byline__text')
+        if byline_p:
+            # 使用markdownify处理，保留正确格式和空格
+            author_info = markdownify.markdownify(str(byline_p), heading_style="ATX").strip()
     
     # 尝试2: 从hbs-article-topper__meta提取
     if not author_info:
         meta_div = soup.find('div', class_='hbs-article-topper__meta')
         if meta_div:
-            author_info = meta_div.get_text(strip=True)
+            byline_p = meta_div.find('p', class_='hbs-byline__text')
+            if byline_p:
+                # 使用markdownify处理，保留正确格式和空格
+                author_info = markdownify.markdownify(str(byline_p), heading_style="ATX").strip()
     
     # 提取摘要
     excerpt = ""
@@ -149,15 +180,15 @@ def extract_article_meta(html_content):
     # 尝试1: 从hbs-split-topper__excerpt提取
     excerpt_div = soup.find('div', class_='hbs-split-topper__excerpt')
     if excerpt_div:
-        excerpt = excerpt_div.get_text(strip=True)
+        excerpt = markdownify.markdownify(str(excerpt_div), heading_style="ATX").strip()
     
     # 尝试2: 从hbs-article-topper__subheading提取
     if not excerpt:
         subheading_div = soup.find('div', class_='hbs-article-topper__subheading')
         if subheading_div:
-            excerpt = subheading_div.get_text(strip=True)
+            excerpt = markdownify.markdownify(str(subheading_div), heading_style="ATX").strip()
     
-    return author_info, excerpt
+    return author_info, excerpt, category
 
 # 主函数
 def main():
@@ -198,14 +229,14 @@ def main():
                 # 获取文章页面HTML
                 article_html = get_static_html_content(article_link)
                 
-                # 提取作者信息、时间和摘要
-                author_info, excerpt = extract_article_meta(article_html)
+                # 提取作者信息、时间、摘要和分类
+                author_info, excerpt, category = extract_article_meta(article_html)
                 
                 # 提取文章正文
                 content = parse_article_content(article_html)
                 
                 # 保存为Markdown文件
-                filename = save_article_to_md(title, image_url, content, article_link, i, DATA_DIR, author_info, excerpt)
+                filename = save_article_to_md(title, image_url, content, article_link, i, DATA_DIR, author_info, excerpt, category)
                 print(f"  已保存到: {filename}")
                 
             except Exception as e:
