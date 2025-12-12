@@ -35,11 +35,13 @@ def test_ivey_article():
             return
         
         # 获取第一篇文章的信息
-        title, list_image_url, article_link, category = articles_info[0]
+        title, list_image_url, article_link, category, author_info, excerpt = articles_info[0]
         print(f"   ✅ 找到第一篇文章")
         print(f"   - 标题: {title}")
         print(f"   - 链接: {article_link}")
         print(f"   - 分类: {category}")
+        print(f"   - 摘要: {excerpt[:50]}...")
+        print(f"   - 作者信息: {author_info}")
         
         # 3. 访问文章详情页
         print(f"3. 访问文章详情页: {article_link}")
@@ -53,10 +55,10 @@ def test_ivey_article():
         image_url = article_image_url if article_image_url else list_image_url
         print(f"   ✅ 封面图片URL: {image_url}")
         
-        # 5. 提取作者信息和摘要
-        print("5. 提取作者信息和摘要...")
-        author_info = extract_article_meta(article_html)
+        # 5. 作者信息和摘要已从列表页面提取，无需重复提取
+        print("5. 作者信息和摘要已从列表页面提取")
         print(f"   ✅ 作者信息: {author_info}")
+        print(f"   ✅ 摘要: {excerpt}")
         
         # 6. 提取文章正文
         print("6. 提取文章正文...")
@@ -66,7 +68,7 @@ def test_ivey_article():
         # 7. 保存为Markdown文件
         print("7. 保存为Markdown文件...")
         data_dir = "data/ivey/test"
-        filename = save_article_to_md(title, image_url, content, article_link, 1, data_dir, author_info, "", category)
+        filename = save_article_to_md(title, image_url, content, article_link, 1, data_dir, author_info, excerpt, category)
         print(f"   ✅ 已保存到: {filename}")
         
         print("\n=== 测试完成 ===")

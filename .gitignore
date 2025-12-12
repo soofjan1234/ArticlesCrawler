@@ -11,6 +11,7 @@ dist/
 .DS_Store
 Thumbs.db
 chrome_user_data
+.trae
 
 data
 data.zip

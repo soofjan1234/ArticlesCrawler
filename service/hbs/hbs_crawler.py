@@ -113,34 +113,27 @@ def parse_list_page(html_content, max_items=10):
 def parse_article_content(html_content):
     soup = BeautifulSoup(html_content, 'html.parser')
     
-    # 查找目标文章内容div
-    article_div = soup.find('div', class_='hbs-global-align-center hbs-rich-text hbs-use-dropcap')
+    # 查找真正的文章内容容器：hbs-article-body__main hbs-use-dropcap
+    article_div = soup.find('div', class_='hbs-article-body__main hbs-use-dropcap')
     if not article_div:
         # 尝试其他可能的选择器
-        article_div = soup.find('div', class_=lambda x: x and 'hbs-rich-text' in x)
+        article_div = soup.find('div', class_=lambda x: x and 'hbs-article-body__main' in x)
+    
+    if not article_div:
+        # 尝试回退到原来的选择器
+        article_div = soup.find('div', class_='hbs-global-align-center hbs-rich-text hbs-use-dropcap')
+        if not article_div:
+            article_div = soup.find('div', class_=lambda x: x and 'hbs-rich-text' in x)
     
     if not article_div:
         raise Exception("未找到目标文章内容div")
     
-    # 查找所有hbs-component--cta-card元素
-    cta_cards = soup.find_all('div', class_='hbs-component--cta-card hbs-global-align-center')
+    # 移除不需要的hbs-global-align-center hbs-text-callout元素
+    text_callouts = article_div.find_all('div', class_='hbs-global-align-center hbs-text-callout')
+    for callout in text_callouts:
+        callout.decompose()
     
-    # 如果找到cta-card元素，将它们添加到article_div的末尾
-    if cta_cards:
-        # 创建一个新的div来包含所有cta-card
-        cta_container = soup.new_tag('div')
-        cta_container['class'] = ['hbs-cta-cards-container']
-        
-        # 添加所有cta-card到容器中
-        for card in cta_cards:
-            cta_container.append(card)
-            # 添加一个换行，避免内容粘连
-            cta_container.append(soup.new_tag('br'))
-        
-        # 将容器添加到article_div的末尾
-        article_div.append(cta_container)
-    
-    # 返回原始HTML内容，由utils.py中的save_article_to_md函数统一转换为Markdown
+    # 返回处理后的HTML内容，由utils.py中的save_article_to_md函数统一转换为Markdown
     return str(article_div)
 
 # 从文章页面提取作者信息、时间、摘要和分类

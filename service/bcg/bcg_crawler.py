@@ -201,9 +201,17 @@ def extract_article_meta(html_content):
     
     # 提取作者信息和时间
     author_info = ""
+    
+    # 原来的提取方式作为主要方式
     details_div = soup.find('div', class_='heroAnimatedPanel_details')
     if details_div:
         author_info = markdownify.markdownify(str(details_div), heading_style="ATX").strip()    
+    
+    # 如果原来的方式失败，尝试查找ArticleHeader-datePublished作为备份
+    if not author_info:
+        date_published = soup.find(attrs={'class': 'ArticleHeader-datePublished'})
+        if date_published:
+            author_info = markdownify.markdownify(str(date_published), heading_style="ATX").strip()
 
     # 提取摘要
     excerpt = ""
@@ -211,11 +219,19 @@ def extract_article_meta(html_content):
     if key_takeaways_div:
         excerpt = markdownify.markdownify(str(key_takeaways_div), heading_style="ATX").strip() 
     
-    # 提取分类信息 - div.heroAnimatedPanel_subTopicLink
+    # 提取分类信息
     category = ""
+    
+    # 原来的提取方式作为主要方式
     category_div = soup.find('div', class_='heroAnimatedPanel_subTopicLink')
     if category_div:
         category = markdownify.markdownify(str(category_div), heading_style="ATX").strip() 
+    
+    # 如果原来的方式失败，尝试查找ArticleHeader-subtopic作为备份
+    if not category:
+        subtopic_div = soup.find('div', class_='ArticleHeader-subtopic')
+        if subtopic_div:
+            category = markdownify.markdownify(str(subtopic_div), heading_style="ATX").strip()
     
     return author_info, excerpt, category
 

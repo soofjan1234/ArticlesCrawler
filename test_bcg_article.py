@@ -13,7 +13,8 @@ from service.utils import get_static_html_content, save_article_to_md
 from service.bcg.bcg_crawler import parse_article_content, extract_article_image, extract_article_meta
 
 # 测试URL
-test_url = "https://www.bcg.com/publications/2025/navigating-the-path-to-sustained-shareholder-returns"
+# test_url = "https://www.bcg.com/publications/2025/navigating-the-path-to-sustained-shareholder-returns"
+test_url = "https://www.bcg.com/publications/2021/most-innovative-companies-overview "
 
 # 测试爬取单篇BCG文章
 def test_single_article():
@@ -52,7 +53,7 @@ def test_single_article():
         # 6. 保存为Markdown文件
         print("6. 保存为Markdown文件...")
         data_dir = "data/bcg/test"
-        filename = save_article_to_md(title, image_url, content, test_url, 1, data_dir, author_info, excerpt, category)
+        filename = save_article_to_md(title, image_url, content, test_url, 2, data_dir, author_info, excerpt, category)
         print(f"   ✅ 已保存到: {filename}")
         
         print("\n=== 测试完成 ===")

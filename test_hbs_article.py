@@ -13,7 +13,8 @@ from service.utils import get_static_html_content, save_article_to_md
 from service.hbs.hbs_crawler import parse_article_content, extract_article_meta
 
 # 测试URL
-test_url = "https://www.library.hbs.edu/working-knowledge/wen-public-displays-political-aligment-china-firms-autocracies-2025"
+# test_url = "https://www.library.hbs.edu/working-knowledge/wen-public-displays-political-aligment-china-firms-autocracies-2025"
+test_url = "https://www.library.hbs.edu/working-knowledge/baik-investor-media-2025"
 
 # 测试爬取单篇文章
 def test_single_article():
@@ -67,7 +68,7 @@ def test_single_article():
         # 定义article_link变量，使用test_url作为文章链接
         article_link = test_url
         # 定义i变量，测试时使用1
-        i = 1
+        i = 2
         filename = save_article_to_md(title, image_url, content, article_link, i, data_dir, author_info, excerpt, category)
         print(f"   ✅ 已保存到: {filename}")
         

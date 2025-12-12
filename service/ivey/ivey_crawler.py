@@ -55,23 +55,13 @@ def parse_list_page(html_content, max_items=10):
         
         # 先不提取图片，留待后续从文章页面提取
         image_url = None
+    
         
-        # 提取分类信息
-        category = ""
+        # 调用修改后的extract_article_meta函数，从article元素中提取摘要和作者信息
+        category, author_info, excerpt = extract_article_meta(article)
         
-        # 查找所有分类链接（a标签，rel="category tag"）
-        category_links = article.find_all('a', rel='category tag')
-        if category_links:
-            # 转换为Markdown格式，并使用空格分隔
-            category = ' '.join([f"[{link.text.strip()}]({link['href']})" for link in category_links])
-        else:
-            # 尝试原来的方法
-            category_span = article.find('span', class_='cmsmasters-postmeta__content')
-            if category_span:
-                category = markdownify.markdownify(str(category_span), heading_style="ATX").strip()
-        
-        # 保存文章信息
-        articles_info.append((title, image_url, link, category))
+        # 保存文章信息，包括元数据
+        articles_info.append((title, image_url, link, category, author_info, excerpt))
     
     # 提取下一页链接
     next_page_url = ""
@@ -118,17 +108,79 @@ def parse_article_content(html_content):
     # 返回原始HTML内容，由utils.py中的save_article_to_md函数统一转换为Markdown
     return str(article_div)
 
-# 提取文章作者和时间信息
-def extract_article_meta(html_content):
-    soup = BeautifulSoup(html_content, 'html.parser')
+# 从列表页面的article元素中提取摘要、时间和作者信息
+def extract_article_meta(article_element):
+    # 首先查找父元素elementor-widget-wrap elementor-element-populated
+    parent_element = article_element.find('div', class_='elementor-widget-wrap elementor-element-populated')
     
-    # 提取作者信息和时间
+    # 提取分类信息
+    category = ""
+    if parent_element:
+        # 查找带有rel="category tag"的链接
+        category_links = parent_element.find_all('a', rel='category tag')
+        if category_links:
+            # 转换为Markdown格式，并使用空格分隔
+            category = ' '.join([f"[{link.text.strip()}]({link['href']})" for link in category_links])
+    
+    # 如果父元素查找失败或没有找到分类，尝试从article_element中查找
+    if not category:
+        category_links = article_element.find_all('a', rel='category tag')
+        if category_links:
+            category = ' '.join([f"[{link.text.strip()}]({link['href']})" for link in category_links])
+    
+    # 提取摘要
+    excerpt = ""
+    if parent_element:
+        # 查找所有子元素
+        children = list(parent_element.children)
+        # 过滤掉空白节点
+        children = [child for child in children if child.name]
+        
+        # 查找第四个子元素（索引为3）
+        if len(children) >= 4:
+            fourth_child = children[3]
+            # 查找div.entry-content
+            excerpt_div = fourth_child.find('div', class_='entry-content')
+            if excerpt_div:
+                # 提取第一个p标签的内容作为摘要
+                p_tag = excerpt_div.find('p')
+                if p_tag:
+                    excerpt = p_tag.get_text(strip=True)
+    
+    # 如果父元素查找失败或没有找到摘要，尝试从article_element中查找
+    if not excerpt:
+        excerpt_div = article_element.find('div', class_='entry-content')
+        if excerpt_div:
+            p_tag = excerpt_div.find('p')
+            if p_tag:
+                excerpt = p_tag.get_text(strip=True)
+    
+    # 提取时间和作者信息
     author_info = ""
-    meta_div = soup.find('div', class_='cmsmasters-single-post-meta_second__inner')
-    if meta_div:
-        author_info = markdownify.markdownify(str(meta_div), heading_style="ATX").strip()
+    if parent_element:
+        # 查找所有子元素
+        children = list(parent_element.children)
+        # 过滤掉空白节点
+        children = [child for child in children if child.name]
+        
+        # 查找第五个子元素（索引为4）- 时间信息
+        if len(children) >= 5:
+            fifth_child = children[4]
+            # 查找div.cmsmasters-meta-data__inner
+            meta_inner = fifth_child.find('div', class_='cmsmasters-meta-data__inner')
+            if meta_inner:
+                author_info += markdownify.markdownify(str(meta_inner), heading_style="ATX").strip() + "\n"
+        
+        # 查找第六个子元素（索引为5）- 作者信息
+        if len(children) >= 6:
+            sixth_child = children[5]
+            # 查找div.cmsmasters-meta-data__inner
+            meta_inner = sixth_child.find('div', class_='cmsmasters-meta-data__inner')
+            if meta_inner:
+                author_info += markdownify.markdownify(str(meta_inner), heading_style="ATX").strip()
     
-    return author_info
+    
+    return category, author_info, excerpt
 
 
 
@@ -164,7 +216,7 @@ def main():
         print(f"\n=== 开始爬取 {len(all_articles)} 篇文章的详细内容 ===")
         
         # 爬取每篇文章的详细内容并保存为Markdown
-        for i, (title, list_image_url, article_link, category) in enumerate(all_articles, 1):
+        for i, (title, list_image_url, article_link, category, author_info, excerpt) in enumerate(all_articles, 1):
             print(f"\n正在处理第 {i}/{len(all_articles)} 篇文章: {title}")
             
             try:
@@ -176,14 +228,11 @@ def main():
                 # 如果文章页面没有图片，使用列表页的图片
                 image_url = article_image_url if article_image_url else list_image_url
                 
-                # 提取作者信息和时间
-                author_info = extract_article_meta(article_html)
-                
                 # 提取文章正文
                 content = parse_article_content(article_html)
                 
                 # 保存为Markdown文件
-                filename = save_article_to_md(title, image_url, content, article_link, i, data_dir, author_info, "", category)
+                filename = save_article_to_md(title, image_url, content, article_link, i, data_dir, author_info, excerpt, category)
                 print(f"  已保存到: {filename}")
                 
             except Exception as e:

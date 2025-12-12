@@ -169,18 +169,25 @@ def save_article_to_md(title, image_url, content, article_link, index, data_dir,
     
     # 构建Markdown内容：标题+分类+作者信息+摘要+图片+文章
     md_content = f"# {title}\n\n"
+    # 构建info.md内容：标题+分类+作者信息+摘要
+    info_content = f"# {title}\n\n"
     
     # 添加分类信息
     if category:
-        md_content += f"{category}\n\n"
+        info_content += f"{category}\n\n"
     
     # 添加作者信息和时间
     if author_info:
-        md_content += f"{author_info}\n\n"
+        info_content += f"{author_info}\n\n"
     
     # 添加摘要
     if excerpt:
-        md_content += f"{excerpt}\n\n"
+        info_content += f"{excerpt}\n\n"
+    
+    # 保存到info.md文件
+    info_filename = os.path.join(article_dir, "info.md")
+    with open(info_filename, 'w', encoding='utf-8') as f:
+        f.write(info_content)
     
     # 如果有封面图片，添加到标题下方
     if image_url and image_url in img_mapping:
